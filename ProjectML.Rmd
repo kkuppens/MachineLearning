@@ -1,0 +1,133 @@
+---
+title: "Project Machine Learning"
+author: "Kurt Kuppens"
+date: "10/23/2014"
+output: html_document
+---
+
+## Synopsis
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). 
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable (A,B,C,D,E) in the training set.
+
+After some exploration, data cleaning, model building, the random forests method with (out of sample accuracy: 99.5%) predicted all 20 test cases correctly.
+
+<http://groupware.les.inf.puc-rio.br/har>
+
+## Loading and preprocessing the data
+
+Data downloading part is not showen. 
+```{r,echo=FALSE}
+if(!file.exists("data")) {
+  dir.create("data")
+}     
+
+if(!file.exists("./data/pml-training.csv"))
+{
+  Train.url <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(Train.url, destfile="./data/pml-training.csv", method="curl")
+  date.train.downloaded <- date()
+  date.train.downloaded
+}
+
+if(!file.exists("./data/pml-testing.csv"))
+{
+  Test.url <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(Test.url, destfile="./data/pml-testing.csv", method="curl")
+  date.test.downloaded <- date()
+  date.test.downloaded
+}
+```
+### Data loading
+
+```{r,echo=TRUE}
+training <-read.csv("./data/pml-training.csv", na.strings=c("", "NA", "NULL"))
+testing <- read.csv("./data/pml-testing.csv", na.strings=c("", "NA", "NULL"))
+dim(training);dim(testing)
+#testing set contains 20 cases,the training set 19622 cases.
+#both have 160 columns or variables
+```
+
+### Data cleaning
+
+The first seven columns of the training and test set contain no relevant features towards the prediction (names, timestamps,.. ) and will be removed.
+
+```{r,echo=TRUE}
+training<-training[,-c(1:7)] # delete first 7 columns containing no features
+testing<-testing[,-c(1:7)]
+```
+
+Many variables contain statistics like `min`, `max`, `avg`, ... . These are calculated values and will also be removed.  
+
+```{r,echo=TRUE}
+keywords <- c("kurtosis_","skewness_","min_","max_","amplitude_")
+keywords <- c(keywords,"avg_","stddev_","var_")
+filter <- c(grep("kurtosis_",names(training)),grep("skewness_",names(training)),
+                grep("min_",names(training)),grep("max_",names(training)),
+                grep("amplitude_",names(training)),grep("var_",names(training)),
+                grep("avg_",names(training)),grep("stddev_",names(training)))
+training<-training[,-filter] # delete all columns with statistics calculated
+testing<-testing[,-filter]
+dim(training);dim(testing)
+#Both training and testing set have now remaining 54 variables, reduced from 160 to 54. 
+```
+
+## Model building
+
+### Training and testing data set
+
+Split the training data into training and testing datasets for training and testing our model before testing against the final 20 test cases. 
+Will use 70% for the training and 30% for the testing as typically used in the course.
+
+```{r,echo=TRUE}
+library(caret)
+set.seed(1230)
+inTrain <- createDataPartition(y = training$classe, p=0.70, list=FALSE)
+training.data <- training[inTrain,]
+testing.data <- training[-inTrain,]
+```
+
+### Model fitting
+
+### Random Forest
+
+Will use the random forest method which uses classification and regression based on a forest of trees using random inputs.
+
+```{r,echo=TRUE}
+library(randomForest)
+model.rf<-randomForest(x=training.data[,-53],y=training.data$classe,prox=TRUE)   #column 53 classe variable
+model.rf
+predict.rf <-predict(model.rf,testing.data[,-53])
+```
+
+### Cross validation and out of sample 
+
+```{r,echo=TRUE}
+confusionMatrix(predict.rf,testing.data$classe)
+```
+
+The endresult is a very good prediction. A very high `99.5%` out of sample Accuracy. So the model is very accurate in prediction for the 30% of testing data we used. From the confusion matrix we can also see that most of the values are on the diagonaal indicating a good predictions.
+
+### 20 test cases prediction
+
+Finally we will use our model that has been proven to be very accurate in predicting the 30% of our test data to predict the 20 test cases as part of the peer assignment. The model predicted all 20 test cases correclty leading to a 20/20 or 100% score.
+
+```{r,echo=TRUE}
+predict.assignment <- predict(model.rf,testing)
+predict.assignment
+```
+
+
+```{r,echo=FALSE}
+pml_write_files = function(x){
+   n = length(x)
+   for(i in 1:n){
+     filename = paste0("problem_id_",i,".txt")
+     write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+   }
+   pml_write_files(predict.assignment)
+ }
+```
+
+
